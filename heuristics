@@ -1,0 +1,432 @@
+#Functie om van een gegeven path de benodigde tijd te berekening die de motoren nodig hebben.
+#function to calculate time path, 
+def CalcTime(path):
+        Time = 0
+        for i in range(1,len(path)):
+            if 1.1*abs(path[i][0]-path[i-1][0]) > abs((path[i][1]-path[i-1][1])):
+                Time += 1.1*abs(path[i][0]-path[i-1][0])
+            else: 
+                    Time +=abs(path[i][1]-path[i-1][1])
+            
+        return float("{:.2f}".format(Time))
+
+#Functie om een distance_matrix aan de hand van de CalcTime functie te maken
+def Timematrix(file):
+
+    fh = open(file,"r")
+    L = fh.readline()
+    L = fh.readline()
+    Toolbox = [0,0]
+    Path =[]
+    Path.append(Toolbox) 
+
+    cordinates = []
+    while L != 'EOF\n':
+        L = L.split()
+        cordinate = [float(L[1]),float(L[2])] 
+        cordinates.append(cordinate)
+        L = fh.readline()
+        
+    options = [Toolbox] 
+
+    for i in cordinates:
+        options.append(i)
+
+
+    time_matrix = []
+    for i in range(len(options)):
+        row = []
+        for j in range(len(options)):
+            row.append(CalcTime([options[i],options[j]]))
+        time_matrix.append(row)
+    
+    return time_matrix,options
+
+#function for minimum spanning tree
+def msp(file):
+    import numpy as np
+    from copy import deepcopy
+
+    distance_matrix_msp = Timematrix(file)[0]
+    coordinates = Timematrix(file)[1]
+
+    distance_matrix_msp_np = np.array(distance_matrix_msp)
+
+    n_vertices = distance_matrix_msp_np.shape[0]
+    spanning = []
+    
+                                                                                
+    visited = [0]                                                                                            
+    n = 1
+    
+    diag_indices = np.arange(n_vertices)
+    distance_matrix_msp_np[diag_indices, diag_indices] = np.inf
+    
+    while n != n_vertices:
+        new_edge = np.argmin(distance_matrix_msp_np[visited], axis=None)                                             
+        new_edge = divmod(new_edge, n_vertices)
+        new_edge = [visited[new_edge[0]], new_edge[1]]                                                       
+        spanning.append(new_edge)
+        visited.append(new_edge[1])
+        distance_matrix_msp_np[visited, new_edge[1]] = np.inf
+        distance_matrix_msp_np[new_edge[1], visited] = np.inf                                                                     
+        n += 1
+
+
+    spanning_coordinates = deepcopy(spanning)
+
+    for j in spanning_coordinates:
+        j[0] = coordinates[j[0]]
+        j[1] = coordinates[j[1]]
+
+    mspTime = 0
+    for i in range(len(spanning_coordinates)):
+        time = CalcTime([spanning_coordinates[i][0],spanning_coordinates[i][1]])
+        spanning[i].append(time)
+        spanning_coordinates[i].append(time)
+        mspTime += time
+    
+ 
+
+    return [coordinates,spanning], mspTime
+
+#functie om de MSP te visualiseren in een plot.
+def VisualizeMSP(msp):
+    import networkx as nx
+    import matplotlib.pyplot as plt
+
+    G = nx.Graph()
+
+    for i in range(len(msp[0])):
+        G.add_node(i,pos=(msp[0][i][0],msp[0][i][1]))
+
+
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    plt.title('Minimum Spanning Tree: diskette d159')
+
+    for i in range(0,len(msp[1])):
+        G.add_edge(msp[1][i][0],msp[1][i][1])
+
+    pos=nx.get_node_attributes(G,'pos')
+
+
+    
+
+    nx.draw_networkx(G, pos,with_labels=False, node_size=5, node_color='b', ax=ax)
+ 
+    ax.set_axis_on()
+    ax.tick_params(left=True, bottom=True, labelleft=True, labelbottom=True)
+
+    plt.show()
+
+#Functie om de route te visualizeren in een plot. 
+def VisualizePath(path):
+    import networkx as nx
+    import matplotlib.pyplot as plt
+
+    G = nx.Graph()
+
+    for i in range(len(path)):
+        G.add_node(i,pos=(path[i][0],path[i][1]))
+
+
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    plt.title('2opt: diskette d159')
+
+    for i in range(1,len(path)):
+        G.add_edge(i-1,i)
+
+    pos=nx.get_node_attributes(G,'pos')
+
+
+    nx.draw_networkx(G, pos,with_labels=False, node_size=5, node_color='b', ax=ax)
+    
+
+
+    ax.set_axis_on()
+    ax.tick_params(left=True, bottom=True, labelleft=True, labelbottom=True)
+
+    plt.show()
+
+#Functie om tot de Christofides route te komen. Returned de route volgens christofides + de benodigde tijd
+def Christofides(filename):
+    import itertools
+
+    import numpy as np
+    import networkx as nx
+    from copy import deepcopy
+
+    from networkx.algorithms.matching import max_weight_matching
+    from networkx.algorithms.euler import eulerian_circuit
+
+
+    distance_matrix = Timematrix(filename)[0]
+    options = Timematrix(filename)[1] 
+
+    #christofides algo
+    def christofides_tsp(MSP, starting_node=0):
+
+        MSP = msp(filename)[0][1]
+        n= len(distance_matrix)
+        mspmatrix = np.zeros((n,n))
+
+
+        for i in MSP:
+            mspmatrix[i[0]][i[1]] = i[2]   
+            mspmatrix[i[1]][i[0]] = i[2]     
+
+       
+        
+        odd_degree_nodes = list(_get_odd_degree_vertices(mspmatrix))
+        odd_degree_nodes_ix = np.ix_(odd_degree_nodes, odd_degree_nodes)
+        nx_graph = nx.from_numpy_array(-1 * graph[odd_degree_nodes_ix])
+        matching = max_weight_matching(nx_graph, maxcardinality=True)
+        euler_multigraph = nx.MultiGraph(mspmatrix)
+        for edge in matching:
+            euler_multigraph.add_edge(odd_degree_nodes[edge[0]], odd_degree_nodes[edge[1]],
+                                    weight=graph[odd_degree_nodes[edge[0]]][odd_degree_nodes[edge[1]]])
+        euler_tour = list(eulerian_circuit(euler_multigraph, source=starting_node))
+        path = list(itertools.chain.from_iterable(euler_tour))
+        return _remove_repeated_vertices(path, starting_node)[:-1]
+
+
+    def _get_odd_degree_vertices(graph):
+        """
+        Finds all the odd degree vertices in graph
+        Args:
+            graph: 2d np array as adj. matrix
+        Returns:
+        Set of vertices that have odd degree
+        """
+        odd_degree_vertices = set()
+        for index, row in enumerate(graph):
+            if len(np.nonzero(row)[0]) % 2 != 0:
+                odd_degree_vertices.add(index)
+        return odd_degree_vertices
+
+
+    def _remove_repeated_vertices(path, starting_node):
+        path = list(dict.fromkeys(path).keys())
+        path.append(starting_node)
+        return path 
+        
+        
+
+
+
+    graph = np.array(distance_matrix)
+    path = christofides_tsp(graph,0)
+
+    path_cordinates = path.copy()
+
+    for k in range(0,len(path)):
+        path_cordinates[k] = options[path[k]]
+    path_cordinates.append([0,0])
+
+    time = CalcTime(path_cordinates)
+
+    return path_cordinates,time
+
+#Functie om de route van de huidige methode te berekenen. Returned deze + de benodigde tijd.
+def Siemenspath(filename):
+
+
+    fh = open(filename,"r")
+    L = fh.readline()
+    L = fh.readline()
+    Toolbox = [0,0]
+    Path =[]
+    Path.append(Toolbox) 
+
+    cordinates = []
+    while L != 'EOF\n':
+        L = L.split()
+        cordinate = [float(L[1]),float(L[2])] 
+        cordinates.append(cordinate)
+        L = fh.readline()
+
+    cordinates.sort(key = lambda x: (x[0],x[1]))
+
+    for i in cordinates:
+        Path.append(i)
+
+    Path.append(Toolbox)
+
+    def CalcTime(path):
+        Time = 0
+        for i in range(1,len(path)):
+            if 1.1*abs(path[i][0]-path[i-1][0]) > abs((path[i][1]-path[i-1][1])):
+                Time += 1.1*abs(path[i][0]-path[i-1][0])
+            else: 
+                    Time +=abs(path[i][1]-path[i-1][1])
+            
+        return float("{:.2f}".format(Time))
+
+    time = CalcTime(Path)
+
+
+    return Path,time
+
+#Functie om de route volgens de nearest neighbor te berekenen. Returned deze + de benodigde tijd.
+def NN(filename):
+    from copy import deepcopy
+    
+    distance_matrix = Timematrix(filename)[0]
+    options = Timematrix(filename)[1]
+
+    for j in range(len(distance_matrix)):
+        for i in range(len(distance_matrix[j])):
+            if j == i:
+                distance_matrix[i][j] = 99999
+
+    s=0
+    visits = [s]
+    candidate_matrix= deepcopy(distance_matrix)
+
+    while len(visits) < len(distance_matrix[0]):
+        if candidate_matrix[s].index(min(candidate_matrix[s])) == 0:
+            mins = 99999
+            for i in candidate_matrix[s]:
+                if i < mins and i > min(candidate_matrix[s]):
+                    mins = i
+            t = candidate_matrix[s].index(mins)
+
+        else:
+            t = candidate_matrix[s].index(min(candidate_matrix[s]))
+
+        for j in range(len(candidate_matrix[s])):
+            candidate_matrix[s][j] = 9999999
+
+        for k in candidate_matrix:
+            k[t] = 9999999
+
+
+    
+
+        visits.append(t)
+        
+        s=t
+
+    
+
+    visits_cordinates = visits.copy()
+
+    for k in range(0,len(visits)):
+        visits_cordinates[k] = options[visits[k]]
+    visits_cordinates.append([0,0])
+    visits.append(0)
+
+    return visits_cordinates, CalcTime(visits_cordinates),visits
+
+#2opt waarbij de gehele route geoptimaliseerd word voor elke mogelijke combinatie. Deze runt 1x. (dus elke mogelijke combi is 1 keer gebruikt)
+def two_opt(filename):
+    from copy import deepcopy
+
+    nn = NN(filename)
+    tm = Timematrix(filename)
+
+    timematrix = tm[0]
+    timematrix_cordinates = tm[1]
+
+    route = nn[2]
+
+    best_cordinates = nn[0]
+    current_time = nn[1]
+
+
+    for i in range(1, len(route)-2):
+        for j in range(i+1, len(route)-1):
+            if j-i == 1: continue 
+            new_route = route[:]
+            new_route[i], new_route[j] = new_route[j], new_route[i]
+            
+            new_time = 0
+            for q in range(1,len(new_route)):
+                new_time += timematrix[new_route[q-1]][new_route[q]]            
+
+            if new_time < current_time:
+                route = new_route
+                current_time = new_time
+            
+
+            
+
+    best_cordinates = route.copy()
+    for k in range(0,len(route)):
+        best_cordinates[k] = timematrix_cordinates[route[k]]
+
+    return best_cordinates,CalcTime(best_cordinates)
+
+#2opt waarbij hij alleen naar de verandering in edges kijkt. (snelle methode).Deze runt todat hij geen verbetering meer ziet. 
+def two_opt_fast(filename):
+    from copy import deepcopy
+    import time
+
+    start = time.time()
+    nn = NN(filename)
+    tm = Timematrix(filename)
+
+    timematrix = tm[0]
+    timematrix_cordinates = tm[1]
+
+    route = nn[2]
+    best_cordinates = nn[0]
+
+
+    improved = True
+    while improved:
+        improved = False
+        for i in range(1, len(route)-2):
+            for j in range(i+1, len(route)-1):
+                if j-i == 1: continue 
+                new_route = route[:]
+                new_route[i], new_route[j] = new_route[j], new_route[i]
+
+                new_time = timematrix[new_route[i-1]][new_route[i]]+timematrix[new_route[i]][new_route[i+1]]+timematrix[new_route[j-1]][new_route[j]]+timematrix[new_route[j]][new_route[j+1]]            
+                current_time = timematrix[route[i-1]][route[i]]+timematrix[route[i]][route[i+1]]+timematrix[route[j-1]][route[j]]+timematrix[route[j]][route[j+1]]
+                now = time.time()
+                if new_time < current_time:
+                                        
+                    route = new_route
+                    improved = True
+                    break
+                elif now > start + 15*60:
+                    break
+            if new_time < current_time or now > start + 15*60:
+                break        
+        if now > start + 15*60:
+            break
+
+    best_cordinates = route.copy()
+    for k in range(0,len(route)):
+        best_cordinates[k] = timematrix_cordinates[route[k]]
+
+    return best_cordinates,CalcTime(best_cordinates)
+    
+
+
+    
+
+
+    
+
+
+    
+
+
+
+
+filename = r"C:\Users\Matth\OneDrive\Documenten\Pytest\ISL\a2152.dat"
+
+
+print(Christofides(filename)[1])
+#print(two_opt(filename)[1]) 
+#print(two_opt_fast(filename)[1])
+#print(VisualizeMSP(msp(filename)[0]))
+#print(VisualizePath(two_opt_fast(filename)[0]))
+#print(Siemenspath(filename)[1])  
+#VisualizePath(Siemenspath(filename)[0])
+#print(NN(filename)[1])
+#VisualizePath(NN(filename)[0])
